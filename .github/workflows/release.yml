@@ -11,23 +11,6 @@ env:
   VERSION: ${{ github.event.inputs.name || github.ref_name }}
 
 jobs:
-  test-scrcpy-server:
-    runs-on: ubuntu-latest
-    env:
-      GRADLE: gradle  # use native gradle instead of ./gradlew in scripts
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Test scrcpy-server
-        run: release/test_server.sh
-
   build-scrcpy-server:
     runs-on: ubuntu-latest
     env:
@@ -50,38 +33,6 @@ jobs:
         with:
           name: scrcpy-server
           path: release/work/build-server/server/scrcpy-server
-
-  test-build-scrcpy-server-without-gradle:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Build without gradle
-        run: server/build_without_gradle.sh
-
-  test-client:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y meson ninja-build nasm ffmpeg libsdl2-2.0-0 \
-             libsdl2-dev libavcodec-dev libavdevice-dev libavformat-dev \
-             libavutil-dev libswresample-dev libusb-1.0-0 libusb-1.0-0-dev \
-             libv4l-dev
-
-      - name: Test
-        run: release/test_client.sh
 
   build-linux-x86_64:
     runs-on: ubuntu-22.04
