@@ -835,7 +835,7 @@ sc_server_connect_to_remote(struct sc_server *server, struct sc_server_info *inf
     if (control_socket != SC_SOCKET_NONE) {
         // 发送第一个字节以握手
         uint8_t dummy = 0;
-        ssize_t w = net_send_all(&server->intr, control_socket, &dummy, 1);
+        ssize_t w = net_send_all(control_socket, &dummy, 1);
         if (w != 1) {
             LOGE("Failed to send initial byte");
             goto fail;
