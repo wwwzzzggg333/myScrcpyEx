@@ -114,6 +114,7 @@ enum {
     OPT_NO_VD_SYSTEM_DECORATIONS,
     OPT_NO_VD_DESTROY_CONTENT,
     OPT_DISPLAY_IME_POLICY,
+    OPT_REMOTE,
 };
 
 struct sc_option {
@@ -833,6 +834,18 @@ static const struct sc_option options[] = {
                 "Supported names are currently \"direct3d\", \"opengl\", "
                 "\"opengles2\", \"opengles\", \"metal\" and \"software\".\n"
                 "<https://wiki.libsdl.org/SDL_HINT_RENDER_DRIVER>",
+    },
+    {
+        .longopt_id = OPT_REMOTE,
+        .longopt = "remote",
+        .argdesc = "ip:port",
+        .text = "Connect directly to a remote scrcpy server without using ADB.\n"
+                "The server must already be running and listening on the specified "
+                "address and port.\n"
+                "The client will establish 3 connections to the same port (in order: "
+                "video, audio, control). The server distinguishes streams by connection order.\n"
+                "This mode bypasses all ADB operations (device discovery, jar push, "
+                "server startup, tunnel creation).",
     },
     {
         .longopt_id = OPT_REQUIRE_AUDIO,
@@ -2583,6 +2596,37 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
             case OPT_RENDER_DRIVER:
                 opts->render_driver = optarg;
                 break;
+            case OPT_REMOTE: {
+                // 解析 IP:PORT 格式
+                char *colon = strchr(optarg, ':');
+                if (!colon) {
+                    LOGE("Invalid remote address format, expected IP:PORT");
+                    return false;
+                }
+                
+                *colon = '\0'; // 分割字符串
+                const char *ip_str = optarg;
+                const char *port_str = colon + 1;
+                
+                // 解析 IP 地址
+                uint32_t remote_host;
+                if (!net_parse_ipv4(ip_str, &remote_host)) {
+                    LOGE("Invalid IP address: %s", ip_str);
+                    return false;
+                }
+                
+                // 解析端口号
+                long port_long;
+                if (!sc_str_parse_integer(port_str, &port_long) || 
+                    port_long <= 0 || port_long > 0xFFFF) {
+                    LOGE("Invalid port: %s", port_str);
+                    return false;
+                }
+                
+                opts->remote_host = remote_host;
+                opts->remote_port = (uint16_t)port_long;
+                break;
+            }
             case OPT_NO_MIPMAPS:
                 opts->mipmaps = false;
                 break;
@@ -3069,6 +3113,20 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
         LOGI("Tunnel host/port is set, "
              "--force-adb-forward automatically enabled.");
         opts->force_adb_forward = true;
+    }
+
+    // --remote 与 ADB 相关参数互斥
+    if (opts->remote_host && (opts->serial || opts->tcpip || 
+                               opts->select_usb || opts->select_tcpip)) {
+        LOGE("--remote cannot be used with device selection options "
+             "(-s, --tcpip, -d, -e)");
+        return false;
+    }
+
+    // --remote 模式下不支持 --list-* 选项
+    if (opts->remote_host && opts->list) {
+        LOGE("--remote cannot be used with --list-* options");
+        return false;
     }
 
     if (opts->video_source == SC_VIDEO_SOURCE_CAMERA) {

@@ -327,6 +327,9 @@ struct scrcpy_options {
     const char *start_app;
     bool vd_destroy_content;
     bool vd_system_decorations;
+    // Remote connection mode (直接连接模式)
+    uint32_t remote_host;  // IPv4 地址（网络字节序）
+    uint16_t remote_port;  // 起始端口号（主机字节序）
 };
 
 extern const struct scrcpy_options scrcpy_options_default;

@@ -71,6 +71,9 @@ struct sc_server_params {
     bool vd_destroy_content;
     bool vd_system_decorations;
     uint8_t list;
+    // Remote connection mode
+    uint32_t remote_host;  // IPv4 地址
+    uint16_t remote_port;  // 起始端口号
 };
 
 struct sc_server {

@@ -522,21 +522,28 @@ sc_server_init(struct sc_server *server, const struct sc_server_params *params,
     // end of the program
     server->params = *params;
 
-    bool ok = sc_adb_init();
-    if (!ok) {
-        return false;
+    // Remote 模式不需要 ADB
+    if (params->remote_host == 0) {
+        bool ok = sc_adb_init();
+        if (!ok) {
+            return false;
+        }
     }
 
-    ok = sc_mutex_init(&server->mutex);
+    bool ok = sc_mutex_init(&server->mutex);
     if (!ok) {
-        sc_adb_destroy();
+        if (params->remote_host == 0) {
+            sc_adb_destroy();
+        }
         return false;
     }
 
     ok = sc_cond_init(&server->cond_stopped);
     if (!ok) {
         sc_mutex_destroy(&server->mutex);
-        sc_adb_destroy();
+        if (params->remote_host == 0) {
+            sc_adb_destroy();
+        }
         return false;
     }
 
@@ -544,7 +551,9 @@ sc_server_init(struct sc_server *server, const struct sc_server_params *params,
     if (!ok) {
         sc_cond_destroy(&server->cond_stopped);
         sc_mutex_destroy(&server->mutex);
-        sc_adb_destroy();
+        if (params->remote_host == 0) {
+            sc_adb_destroy();
+        }
         return false;
     }
 
@@ -738,6 +747,132 @@ fail:
                             server->device_socket_name);
     }
 
+    return false;
+}
+
+// 专门用于 remote 模式的连接函数
+static bool
+sc_server_connect_to_remote(struct sc_server *server, struct sc_server_info *info) {
+    const struct sc_server_params *params = &server->params;
+    
+    uint32_t remote_host = params->remote_host;
+    uint16_t remote_port = params->remote_port;
+    
+    bool video = params->video;
+    bool audio = params->audio;
+    bool control = params->control;
+    
+    sc_socket video_socket = SC_SOCKET_NONE;
+    sc_socket audio_socket = SC_SOCKET_NONE;
+    sc_socket control_socket = SC_SOCKET_NONE;
+    
+    // 连接重试参数
+    unsigned attempts = 3;  // 最多尝试 3 次
+    sc_tick delay = SC_TICK_FROM_MS(3000);  // 每次间隔 3000ms
+    
+    // 按顺序连接到同一个端口（通过连接顺序区分不同的流）
+    // 注意：与标准 scrcpy 一样，服务端在同一个 socket 上按顺序 accept 三个连接
+    sc_socket first_socket = connect_to_server(server, attempts, delay,
+                                               remote_host, remote_port);
+    if (first_socket == SC_SOCKET_NONE) {
+        LOGE("Failed to connect to remote server");
+        goto fail;
+    }
+    
+    if (video) {
+        video_socket = first_socket;
+        LOGI("Video stream connected (1st connection)");
+    }
+    
+    if (audio) {
+        if (!video) {
+            audio_socket = first_socket;
+            LOGI("Audio stream connected (1st connection)");
+        } else {
+            LOGI("Connecting to audio stream (2nd connection)...");
+            audio_socket = net_socket();
+            if (audio_socket == SC_SOCKET_NONE) {
+                goto fail;
+            }
+            bool ok = net_connect_intr(&server->intr, audio_socket,
+                                       remote_host, remote_port);
+            if (!ok) {
+                LOGE("Failed to connect audio stream");
+                goto fail;
+            }
+            LOGI("Audio stream connected");
+        }
+    }
+    
+    if (control) {
+        if (!video && !audio) {
+            control_socket = first_socket;
+            LOGI("Control stream connected (1st connection)");
+        } else {
+            LOGI("Connecting to control stream (%s connection)...",
+                 video && audio ? "3rd" : "2nd");
+            control_socket = net_socket();
+            if (control_socket == SC_SOCKET_NONE) {
+                goto fail;
+            }
+            bool ok = net_connect_intr(&server->intr, control_socket,
+                                       remote_host, remote_port);
+            if (!ok) {
+                LOGE("Failed to connect control stream");
+                goto fail;
+            }
+            LOGI("Control stream connected");
+        }
+    }
+    
+    if (control_socket != SC_SOCKET_NONE) {
+        // Disable Nagle's algorithm for the control socket
+        bool ok = net_set_tcp_nodelay(control_socket, true);
+        (void) ok; // error already logged
+    }
+    
+    // 发送初始字节并读取设备信息（如果有 control socket）
+    if (control_socket != SC_SOCKET_NONE) {
+        // 发送第一个字节以握手
+        uint8_t dummy = 0;
+        ssize_t w = net_send_all(&server->intr, control_socket, &dummy, 1);
+        if (w != 1) {
+            LOGE("Failed to send initial byte");
+            goto fail;
+        }
+    }
+    
+    // 从第一个可用 socket 读取设备信息
+    sc_socket info_socket = video_socket != SC_SOCKET_NONE ? video_socket :
+                           (audio_socket != SC_SOCKET_NONE ? audio_socket :
+                            control_socket);
+    
+    if (info_socket != SC_SOCKET_NONE) {
+        bool ok = device_read_info(&server->intr, info_socket, info);
+        if (!ok) {
+            LOGW("Could not read device info, using default name");
+            // 不算致命错误，继续执行
+        }
+    }
+    
+    // 保存 socket
+    server->video_socket = video_socket;
+    server->audio_socket = audio_socket;
+    server->control_socket = control_socket;
+    
+    LOGI("All streams connected successfully");
+    return true;
+
+fail:
+    if (video_socket != SC_SOCKET_NONE) {
+        net_close(video_socket);
+    }
+    if (audio_socket != SC_SOCKET_NONE) {
+        net_close(audio_socket);
+    }
+    if (control_socket != SC_SOCKET_NONE) {
+        net_close(control_socket);
+    }
     return false;
 }
 
@@ -942,6 +1077,42 @@ run_server(void *data) {
     struct sc_server *server = data;
 
     const struct sc_server_params *params = &server->params;
+
+    // Remote 模式：直接连接，跳过所有 ADB 操作
+    if (params->remote_host != 0) {
+        LOGI("Remote connection mode: connecting to %u.%u.%u.%u:%u",
+             (params->remote_host >> 24) & 0xFF,
+             (params->remote_host >> 16) & 0xFF,
+             (params->remote_host >> 8) & 0xFF,
+             params->remote_host & 0xFF,
+             params->remote_port);
+        
+        // 设置为 forward 模式（客户端主动连接）
+        server->tunnel.forward = true;
+        server->tunnel.enabled = true;
+        server->tunnel.local_port = params->remote_port;
+        
+        // 设置设备名称为 "Remote Device"
+        strcpy(server->info.device_name, "Remote Device");
+        
+        // 直接建立连接
+        bool ok = sc_server_connect_to_remote(server, &server->info);
+        if (!ok) {
+            goto error_connection_failed;
+        }
+        
+        // 通知连接成功
+        server->cbs->on_connected(server, server->cbs_userdata);
+        
+        // 等待停止信号
+        sc_mutex_lock(&server->mutex);
+        while (!server->stopped) {
+            sc_cond_wait(&server->cond_stopped, &server->mutex);
+        }
+        sc_mutex_unlock(&server->mutex);
+        
+        return 0;
+    }
 
     // Execute "adb start-server" before "adb devices" so that daemon starting
     // output/errors is correctly printed in the console ("adb devices" output
@@ -1196,5 +1367,8 @@ sc_server_destroy(struct sc_server *server) {
     sc_cond_destroy(&server->cond_stopped);
     sc_mutex_destroy(&server->mutex);
 
-    sc_adb_destroy();
+    // Remote 模式不需要销毁 ADB
+    if (server->params.remote_host == 0) {
+        sc_adb_destroy();
+    }
 }

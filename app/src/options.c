@@ -113,6 +113,8 @@ const struct scrcpy_options scrcpy_options_default = {
     .angle = NULL,
     .vd_destroy_content = true,
     .vd_system_decorations = true,
+    .remote_host = 0,  // 0 表示未设置
+    .remote_port = 0,
 };
 
 enum sc_orientation
