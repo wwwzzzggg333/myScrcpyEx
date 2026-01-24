@@ -40,8 +40,6 @@ scrcpy 在 **forward 模式**下的通信协议是：
 
 ### 修改内容
 
-/* Started by Cursor 10137777 20260124153500000 */
-**删除了错误的代码**：
 ```c
 // 这段代码已被删除
 if (control_socket != SC_SOCKET_NONE) {
@@ -70,7 +68,6 @@ if (info_socket != SC_SOCKET_NONE) {
     }
 }
 ```
-/* Ended by Cursor 10137777 20260124153500000 */
 
 ---
 
@@ -270,7 +267,6 @@ dir build\app\scrcpy.exe
 ---
 
 **修复完成日期**：2026-01-24  
-**修复人员**：Cursor AI (10137777)  
 **测试状态**：⏳ 等待用户验证
 
 如有任何问题，请参考详细文档或重新运行测试。
