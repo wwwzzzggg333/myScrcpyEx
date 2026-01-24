@@ -831,18 +831,19 @@ sc_server_connect_to_remote(struct sc_server *server, struct sc_server_info *inf
         (void) ok; // error already logged
     }
     
-    // 发送初始字节并读取设备信息（如果有 control socket）
-    if (control_socket != SC_SOCKET_NONE) {
-        // 发送第一个字节以握手
-        uint8_t dummy = 0;
-        ssize_t w = net_send_all(control_socket, &dummy, 1);
-        if (w != 1) {
-            LOGE("Failed to send initial byte");
-            goto fail;
-        }
-    }
+    // // 发送初始字节并读取设备信息（如果有 control socket）
+    // if (control_socket != SC_SOCKET_NONE) {
+    //     // 发送第一个字节以握手
+    //     uint8_t dummy = 0;
+    //     ssize_t w = net_send_all(control_socket, &dummy, 1);
+    //     if (w != 1) {
+    //         LOGE("Failed to send initial byte");
+    //         goto fail;
+    //     }
+    // }
     
     // 从第一个可用 socket 读取设备信息
+    // 注意：在 forward 模式下，客户端不发送握手字节，直接读取设备信息
     sc_socket info_socket = video_socket != SC_SOCKET_NONE ? video_socket :
                            (audio_socket != SC_SOCKET_NONE ? audio_socket :
                             control_socket);
