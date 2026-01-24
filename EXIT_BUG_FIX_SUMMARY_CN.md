@@ -43,7 +43,6 @@ DEBUG: [Audio] Buffering threshold exceeded, skipping 6 samples
 
 在 `app/src/server.c` 的 `run_server()` 函数中，remote 模式退出前添加中断 socket 的代码：
 
-/* Started by Cursor 10137777 20260124160000000 */
 ```c
 // 等待停止信号
 sc_mutex_lock(&server->mutex);
@@ -71,7 +70,6 @@ LOGI("Remote connection stopped");
 
 return 0;
 ```
-/* Ended by Cursor 10137777 20260124160000000 */
 
 **效果**：
 - `net_interrupt()` 会立即中断所有阻塞的读写操作
@@ -225,7 +223,6 @@ DEBUG: Audio demuxer stopped
 ---
 
 **修复日期**：2026-01-24  
-**修复人员**：Cursor AI (10137777)  
 **测试状态**：⏳ 等待用户验证
 
 测试完成后请告知结果，如有问题随时反馈！🚀
