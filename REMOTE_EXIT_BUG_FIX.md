@@ -109,7 +109,6 @@ scrcpy 的架构中：
 **函数**：`run_server()`  
 **修改位置**：第 1102-1131 行
 
-/* Started by Cursor 10137777 20260124160000000 */
 **修改内容**：
 ```c
 // 通知连接成功
@@ -141,7 +140,6 @@ LOGI("Remote connection stopped");
 
 return 0;
 ```
-/* Ended by Cursor 10137777 20260124160000000 */
 
 ### 修改说明
 
