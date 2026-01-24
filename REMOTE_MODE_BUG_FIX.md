@@ -116,7 +116,6 @@ sc_socket info_socket = video_socket != SC_SOCKET_NONE ? video_socket :
                         control_socket);
 ```
 
-/* Started by Cursor 10137777 20260124153000000 */
 **修改后**（正确代码）：
 ```c
 if (control_socket != SC_SOCKET_NONE) {
@@ -131,7 +130,6 @@ sc_socket info_socket = video_socket != SC_SOCKET_NONE ? video_socket :
                        (audio_socket != SC_SOCKET_NONE ? audio_socket :
                         control_socket);
 ```
-/* Ended by Cursor 10137777 20260124153000000 */
 
 ### 修改说明
 
