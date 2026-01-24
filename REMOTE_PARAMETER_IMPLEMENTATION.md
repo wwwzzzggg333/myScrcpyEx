@@ -396,6 +396,16 @@ scrcpy --remote=192.168.1.100:50001 -b 16M --max-fps=60
 
 详细信息请参考：[REMOTE_MODE_BUG_FIX.md](REMOTE_MODE_BUG_FIX.md)
 
+### Bug #2: 窗口关闭后进程不退出（2026-01-24 修复）
+
+**问题**：关闭投屏窗口后，客户端进程不退出，持续打印音频缓冲区警告信息。
+
+**原因**：`run_server()` 函数的 remote 模式分支在退出前没有中断 socket 连接，导致 demuxer 持续运行。
+
+**修复**：在收到停止信号后，添加 `net_interrupt()` 调用中断所有 socket（第 1113-1126 行），使 demuxer 能够检测到错误并停止。
+
+详细信息请参考：[REMOTE_EXIT_BUG_FIX.md](REMOTE_EXIT_BUG_FIX.md)
+
 ---
 
 ## 已知限制
