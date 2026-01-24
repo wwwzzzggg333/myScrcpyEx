@@ -374,6 +374,7 @@ scrcpy --remote=192.168.1.100:50001 -b 16M --max-fps=60
 - 错误处理
 - 资源管理
 - 文档编写
+- Bug 修复（握手协议错误）
 
 ⏳ **待测试**：
 - 实际连接测试
@@ -382,6 +383,18 @@ scrcpy --remote=192.168.1.100:50001 -b 16M --max-fps=60
 - 边界条件测试
 
 详细测试指南请参考：[REMOTE_PARAMETER_TESTING.md](REMOTE_PARAMETER_TESTING.md)
+
+## 已修复问题
+
+### Bug #1: 连接立即断开（2026-01-24 修复）
+
+**问题**：使用 `--remote` 连接时，虽然能建立连接但立即断开。
+
+**原因**：`sc_server_connect_to_remote()` 函数错误地发送了握手字节，而 forward 模式的协议不需要客户端发送握手数据。
+
+**修复**：删除发送握手字节的代码（原第 836-843 行），直接读取设备信息。
+
+详细信息请参考：[REMOTE_MODE_BUG_FIX.md](REMOTE_MODE_BUG_FIX.md)
 
 ---
 
