@@ -1095,6 +1095,14 @@ run_server(void *data) {
         // 设置设备名称为 "Remote Device"
         strcpy(server->info.device_name, "Remote Device");
         
+        // 在 remote 模式下设置一个假的 serial，用于 file_pusher 等模块
+        // 注意：remote 模式下 file_pusher 的功能可能受限
+        server->serial = strdup("remote");
+        if (!server->serial) {
+            LOG_OOM();
+            goto error_connection_failed;
+        }
+
         // 直接建立连接
         bool ok = sc_server_connect_to_remote(server, &server->info);
         if (!ok) {

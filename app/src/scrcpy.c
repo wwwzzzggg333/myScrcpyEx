@@ -566,7 +566,8 @@ scrcpy(struct scrcpy_options *options) {
 
     struct sc_file_pusher *fp = NULL;
 
-    if (options->video_playback && options->control) {
+    // 在 remote 模式下跳过 file_pusher 初始化，因为它需要 ADB
+    if (options->video_playback && options->control && !options->remote_host) {
         if (!sc_file_pusher_init(&s->file_pusher, serial,
                                  options->push_target)) {
             goto end;
