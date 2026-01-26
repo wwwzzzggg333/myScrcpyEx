@@ -1237,6 +1237,11 @@ static const struct sc_envvar envvars[] = {
         .text = "Path to the program icon",
     },
     {
+        .name = "SCRCPY_REMOTE",
+        .text = "Remote server address (IP:PORT format) to connect directly, "
+                "bypassing ADB (e.g., \"192.168.1.100:50001\")",
+    },
+    {
         .name = "SCRCPY_SERVER_PATH",
         .text = "Path to the server binary",
     },
@@ -3372,6 +3377,65 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
         if (v4l2) {
             LOGE("OTG mode: could not sink to V4L2 device");
             return false;
+        }
+    }
+
+    // 检查 SCRCPY_REMOTE 环境变量（如果命令行未指定 --remote）
+    if (opts->remote_host == 0) {
+        const char *env_remote = getenv("SCRCPY_REMOTE");
+        if (env_remote) {
+            LOGI("Using SCRCPY_REMOTE: %s", env_remote);
+            
+            // 解析格式：IP:PORT
+            char *env_remote_copy = strdup(env_remote);
+            if (!env_remote_copy) {
+                LOG_OOM();
+                return false;
+            }
+            
+            char *colon = strchr(env_remote_copy, ':');
+            if (!colon) {
+                LOGE("Invalid SCRCPY_REMOTE format, expected IP:PORT (e.g., \"192.168.1.100:50001\")");
+                free(env_remote_copy);
+                return false;
+            }
+            
+            *colon = '\0';
+            const char *ip_str = env_remote_copy;
+            const char *port_str = colon + 1;
+            
+            uint32_t remote_host;
+            if (!net_parse_ipv4(ip_str, &remote_host)) {
+                LOGE("Invalid IP address in SCRCPY_REMOTE: %s", ip_str);
+                free(env_remote_copy);
+                return false;
+            }
+            
+            long port_long;
+            if (!sc_str_parse_integer(port_str, &port_long) || 
+                port_long <= 0 || port_long > 0xFFFF) {
+                LOGE("Invalid port in SCRCPY_REMOTE: %s", port_str);
+                free(env_remote_copy);
+                return false;
+            }
+            
+            opts->remote_host = remote_host;
+            opts->remote_port = (uint16_t)port_long;
+            
+            free(env_remote_copy);
+            
+            // 检查与其他参数的冲突
+            if (opts->serial || opts->tcpip || 
+                opts->select_usb || opts->select_tcpip) {
+                LOGE("SCRCPY_REMOTE cannot be used with device selection options "
+                     "(-s, --tcpip, -d, -e)");
+                return false;
+            }
+            
+            if (opts->list) {
+                LOGE("SCRCPY_REMOTE cannot be used with --list-* options");
+                return false;
+            }
         }
     }
 
