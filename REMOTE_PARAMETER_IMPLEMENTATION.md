@@ -10,6 +10,32 @@
 
 ---
 
+## 环境变量支持
+
+### SCRCPY_REMOTE
+
+**实现日期**：2026-01-26
+
+从该版本开始，scrcpy 支持通过 `SCRCPY_REMOTE` 环境变量设置远程连接地址，提供更灵活的配置方式。
+
+**格式**：`IP:PORT`（例如：`192.168.1.100:50001`）
+
+**优先级**：
+1. 命令行参数 `--remote` 的优先级最高
+2. 如果未指定 `--remote`，则检查 `SCRCPY_REMOTE` 环境变量
+3. 如果环境变量也未设置，则使用默认的 ADB 模式
+
+**使用场景**：
+- 避免在脚本中反复输入 `--remote` 参数
+- 在自动化测试环境中统一配置
+- 团队协作中共享配置
+
+**限制**：
+- 与 `--remote` 参数相同，不能与 ADB 设备选择选项同时使用
+- 不能与 `--list-*` 选项同时使用
+
+---
+
 ## 文件修改清单
 
 ### 1. `app/src/cli.c` - 命令行参数解析
@@ -19,8 +45,12 @@
 - 在 `options` 数组中添加 `--remote` 参数定义（第 840 行附近）
 - 在 `scrcpy_parse_args()` 函数中添加解析逻辑（第 2600 行附近）
 - 添加参数冲突检查（第 3118 行附近）
+- **[2026-01-26 新增]** 在 `envvars` 数组中添加 `SCRCPY_REMOTE` 环境变量说明（第 1238 行附近）
+- **[2026-01-26 新增]** 在 `parse_args_with_getopt()` 函数结尾添加环境变量解析逻辑（第 3386 行附近）
 
 **关键代码**：
+
+#### 命令行参数解析
 ```c
 // 解析 IP:PORT 格式
 case OPT_REMOTE: {
@@ -62,6 +92,67 @@ if (opts->remote_host && (opts->serial || opts->tcpip ||
 if (opts->remote_host && opts->list) {
     LOGE("--remote cannot be used with --list-* options");
     return false;
+}
+```
+
+#### 环境变量解析（2026-01-26 新增）
+```c
+// 在 parse_args_with_getopt() 函数结尾
+if (opts->remote_host == 0) {
+    const char *env_remote = getenv("SCRCPY_REMOTE");
+    if (env_remote) {
+        LOGI("Using SCRCPY_REMOTE: %s", env_remote);
+        
+        // 解析格式：IP:PORT（与命令行参数相同的逻辑）
+        char *env_remote_copy = strdup(env_remote);
+        if (!env_remote_copy) {
+            LOG_OOM();
+            return false;
+        }
+        
+        char *colon = strchr(env_remote_copy, ':');
+        if (!colon) {
+            LOGE("Invalid SCRCPY_REMOTE format, expected IP:PORT");
+            free(env_remote_copy);
+            return false;
+        }
+        
+        *colon = '\0';
+        const char *ip_str = env_remote_copy;
+        const char *port_str = colon + 1;
+        
+        uint32_t remote_host;
+        if (!net_parse_ipv4(ip_str, &remote_host)) {
+            LOGE("Invalid IP address in SCRCPY_REMOTE: %s", ip_str);
+            free(env_remote_copy);
+            return false;
+        }
+        
+        long port_long;
+        if (!sc_str_parse_integer(port_str, &port_long) || 
+            port_long <= 0 || port_long > 0xFFFF) {
+            LOGE("Invalid port in SCRCPY_REMOTE: %s", port_str);
+            free(env_remote_copy);
+            return false;
+        }
+        
+        opts->remote_host = remote_host;
+        opts->remote_port = (uint16_t)port_long;
+        
+        free(env_remote_copy);
+        
+        // 检查与其他参数的冲突
+        if (opts->serial || opts->tcpip || 
+            opts->select_usb || opts->select_tcpip) {
+            LOGE("SCRCPY_REMOTE cannot be used with device selection options");
+            return false;
+        }
+        
+        if (opts->list) {
+            LOGE("SCRCPY_REMOTE cannot be used with --list-* options");
+            return false;
+        }
+    }
 }
 ```
 
@@ -289,7 +380,19 @@ struct sc_server_params params = {
 
 ## 技术实现细节
 
-### 1. IP 地址解析
+### 1. 参数优先级
+
+remote 连接地址的获取遵循以下优先级（从高到低）：
+
+1. **命令行参数 `--remote`**：如果指定，直接使用
+2. **环境变量 `SCRCPY_REMOTE`**：如果命令行未指定，则检查环境变量
+3. **默认 ADB 模式**：如果都未设置，使用传统的 ADB 连接方式
+
+这种设计允许用户：
+- 在环境变量中设置默认地址，但可以通过命令行参数临时覆盖
+- 在自动化脚本中灵活配置
+
+### 2. IP 地址解析
 
 使用 `net_parse_ipv4()` 函数将字符串格式的 IP 地址转换为 32 位整数（网络字节序）。
 
@@ -344,9 +447,29 @@ struct sc_server_params params = {
 
 ### 基本用法
 
+#### 使用命令行参数
+
 ```bash
 scrcpy --remote=192.168.1.100:50001
 ```
+
+#### 使用环境变量
+
+```bash
+# Windows (PowerShell)
+$env:SCRCPY_REMOTE="192.168.1.100:50001"
+scrcpy
+
+# Windows (CMD)
+set SCRCPY_REMOTE=192.168.1.100:50001
+scrcpy
+
+# Linux / macOS
+export SCRCPY_REMOTE=192.168.1.100:50001
+scrcpy
+```
+
+**注意**：命令行参数 `--remote` 的优先级高于环境变量 `SCRCPY_REMOTE`。
 
 ### 与其他参数组合
 
@@ -371,6 +494,7 @@ scrcpy --remote=192.168.1.100:50001 -b 16M --max-fps=60
 ✅ **已完成**：
 - 代码实现
 - 参数解析
+- 环境变量支持（2026-01-26）
 - 错误处理
 - 资源管理
 - 文档编写
@@ -378,6 +502,7 @@ scrcpy --remote=192.168.1.100:50001 -b 16M --max-fps=60
 
 ⏳ **待测试**：
 - 实际连接测试
+- 环境变量功能测试
 - 性能测试
 - 稳定性测试
 - 边界条件测试
@@ -430,11 +555,18 @@ scrcpy --remote=192.168.1.100:50001 -b 16M --max-fps=60
 
 ## 总结
 
-`--remote` 参数的成功实现为 scrcpy 提供了更灵活的连接方式，特别适用于：
+`--remote` 参数和 `SCRCPY_REMOTE` 环境变量的成功实现为 scrcpy 提供了更灵活的连接方式，特别适用于：
 - 远程服务器场景
 - 复杂网络环境（如 SSH 隧道）
 - 需要跳过 ADB 的场景
 - 多客户端连接同一服务端
+- 自动化测试和脚本环境
+
+**环境变量支持的优势**：
+- 避免在脚本中反复输入长参数
+- 在 CI/CD 环境中便于统一配置
+- 保持命令行简洁的同时提供灵活性
+- 命令行参数可以覆盖环境变量，兼顾灵活性和便利性
 
 所有代码修改都遵循了项目的编码规范，并添加了清晰的标记和注释，便于后续维护和审查。
 
