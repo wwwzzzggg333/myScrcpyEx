@@ -5,6 +5,7 @@ on:
     inputs:
       name:
         description: 'Version name (default is ref name)'
+  pull_request:
 
 env:
   # $VERSION is used by release scripts
