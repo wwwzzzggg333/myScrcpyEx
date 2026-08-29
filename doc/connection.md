@@ -5,8 +5,11 @@
 If exactly one device is connected (i.e. listed by `adb devices`), then it is
 automatically selected.
 
-However, if there are multiple devices connected, you must specify the one to
-use in one of 4 ways:
+If no device is connected, or if several devices are connected, _scrcpy_ opens a
+small window to pick a device (or to refresh the list after plugging one in).
+Close the window to cancel.
+
+You can still specify the device explicitly in one of 4 ways:
  - by its serial:
    ```bash
    scrcpy --serial=0123456789abcdef

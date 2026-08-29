@@ -18,6 +18,7 @@
 #include "controller.h"
 #include "decoder.h"
 #include "delay_buffer.h"
+#include "device_picker.h"
 #include "demuxer.h"
 #include "events.h"
 #include "file_pusher.h"
@@ -385,6 +386,7 @@ scrcpy(struct scrcpy_options *options) {
     memset(&scrcpy, 42, sizeof(scrcpy));
 #endif
     struct scrcpy *s = &scrcpy;
+    char *picked_serial = NULL;
 
     // Minimal SDL initialization
     if (SDL_Init(SDL_INIT_EVENTS)) {
@@ -491,6 +493,21 @@ scrcpy(struct scrcpy_options *options) {
         // Set hints before starting the server thread to avoid race conditions
         // in SDL
         sdl_set_hints(options->render_driver);
+    }
+
+    bool has_explicit_device = options->serial
+            || options->select_usb
+            || options->select_tcpip
+            || options->tcpip_dst
+            || getenv("ANDROID_SERIAL");
+    if (options->window && !has_explicit_device && !options->remote_host) {
+        if (!sc_device_picker_choose(&picked_serial)) {
+            ret = SCRCPY_EXIT_FAILURE;
+            goto end;
+        }
+        if (picked_serial) {
+            s->server.params.req_serial = picked_serial;
+        }
     }
 
     if (!sc_server_start(&s->server)) {
@@ -1066,6 +1083,8 @@ end:
     }
 
     sc_server_destroy(&s->server);
+
+    free(picked_serial);
 
     return ret;
 }

@@ -13,6 +13,8 @@ src = [
     'src/controller.c',
     'src/decoder.c',
     'src/delay_buffer.c',
+    'src/device_picker.c',
+    'src/device_picker_layout.c',
     'src/demuxer.c',
     'src/device_msg.c',
     'src/display.c',
@@ -247,6 +249,11 @@ if get_option('buildtype') == 'debug'
         ['test_device_msg_deserialize', [
             'tests/test_device_msg_deserialize.c',
             'src/device_msg.c',
+        ]],
+        ['test_device_picker', [
+            'tests/test_device_picker.c',
+            'src/device_picker_layout.c',
+            'src/adb/adb_device.c',
         ]],
         ['test_orientation', [
             'tests/test_orientation.c',
