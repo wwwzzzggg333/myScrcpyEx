@@ -451,7 +451,7 @@ sc_adb_disconnect(struct sc_intr *intr, const char *ip_port, unsigned flags) {
     return process_check_success_intr(intr, pid, "adb disconnect", flags);
 }
 
-static bool
+bool
 sc_adb_list_devices(struct sc_intr *intr, unsigned flags,
                     struct sc_vec_adb_devices *out_vec) {
     const char *const argv[] = SC_ADB_COMMAND("devices", "-l");

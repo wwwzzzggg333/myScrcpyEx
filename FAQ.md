@@ -27,6 +27,10 @@ in the release, so it should work out-of-the-box.
 
 >     ERROR: Could not find any ADB device
 
+If you launched _scrcpy_ without selecting a device, a window should appear
+instead, with a **Refresh** button. If the window does not appear (for example
+with `--no-window`), you get the error above.
+
 Check that you correctly enabled [adb debugging][enable-adb].
 
 Your device must be detected by `adb`:
@@ -58,7 +62,10 @@ If it does not open, check [stackoverflow][device-unauthorized].
 
 ### Several devices connected
 
-If several devices are connected, you will encounter this error:
+If several devices are connected and you did not pass `-s`, `-d` or `-e`, a
+window lists them so you can click the one to mirror.
+
+You can still select a device from the command line:
 
 >     ERROR: Multiple (2) ADB devices:
 >     ERROR:     -->   (usb)  0123456789abcdef                device  Nexus_5
