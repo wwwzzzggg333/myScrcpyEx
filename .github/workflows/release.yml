@@ -8,9 +8,9 @@ on:
         description: 'Version name (default is ref name)'
 
 env:
-  # $VERSION is used by release scripts as a filename. Branch names may contain
-  # slashes (e.g. cursor/foo), which would be treated as path separators.
-  VERSION: ${{ replace(github.event.inputs.name || github.ref_name, '/', '-') }}
+  # Used by release scripts. Slashes in branch names are sanitized in
+  # release/build_common so they are safe as filenames.
+  VERSION: ${{ github.event.inputs.name || github.ref_name }}
 
 jobs:
   build-scrcpy-server:
@@ -459,8 +459,11 @@ jobs:
       - name: Generate checksums
         run: release/generate_checksums.sh
 
+      - name: Sanitize artifact name
+        run: echo "ARTIFACT_VERSION=${VERSION//\//-}" >> "$GITHUB_ENV"
+
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: scrcpy-release-${{ env.VERSION }}
+          name: scrcpy-release-${{ env.ARTIFACT_VERSION }}
           path: release/output
