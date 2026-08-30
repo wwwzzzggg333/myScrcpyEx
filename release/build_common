@@ -3,3 +3,5 @@ WORK_DIR="$PWD/work"
 OUTPUT_DIR="$PWD/output"
 
 VERSION="${VERSION:-$(git describe --tags --always)}"
+# Artifact filenames cannot contain path separators
+VERSION="${VERSION//\//-}"

@@ -8,8 +8,9 @@ on:
         description: 'Version name (default is ref name)'
 
 env:
-  # $VERSION is used by release scripts
-  VERSION: ${{ github.event.inputs.name || github.ref_name }}
+  # $VERSION is used by release scripts as a filename. Branch names may contain
+  # slashes (e.g. cursor/foo), which would be treated as path separators.
+  VERSION: ${{ replace(github.event.inputs.name || github.ref_name, '/', '-') }}
 
 jobs:
   build-scrcpy-server:
