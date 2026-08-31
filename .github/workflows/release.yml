@@ -1,16 +1,27 @@
 name: Build
 
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
       name:
         description: 'Version name (default is ref name)'
 
 env:
-  # $VERSION is used by release scripts
+  # Used by release scripts. Slashes in branch names are sanitized in
+  # release/build_common so they are safe as filenames.
   VERSION: ${{ github.event.inputs.name || github.ref_name }}
 
 jobs:
+  test-dep-download-retry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test get_file retries
+        run: bash app/deps/test_get_file.sh
+
   build-scrcpy-server:
     runs-on: ubuntu-latest
     env:
@@ -404,6 +415,7 @@ jobs:
 
   release:
     needs:
+      - test-dep-download-retry
       - build-scrcpy-server
       - package-linux-x86_64
       - package-win32
@@ -457,8 +469,11 @@ jobs:
       - name: Generate checksums
         run: release/generate_checksums.sh
 
+      - name: Sanitize artifact name
+        run: echo "ARTIFACT_VERSION=${VERSION//\//-}" >> "$GITHUB_ENV"
+
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: scrcpy-release-${{ env.VERSION }}
+          name: scrcpy-release-${{ env.ARTIFACT_VERSION }}
           path: release/output
