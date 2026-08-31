@@ -152,6 +152,8 @@ jobs:
       - package-win32
       - package-win64
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -181,3 +183,32 @@ jobs:
         with:
           name: scrcpy-release-${{ env.ARTIFACT_VERSION }}
           path: release/output
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > /tmp/release-notes.md <<'EOF'
+          基于 [scrcpy](https://github.com/Genymobile/scrcpy) 3.3.4 的增强版。
+
+          ### 本 fork 新增
+          - 启动时无设备或多设备弹出选择窗口
+          - 支持 `SCRCPY_REMOTE` 远程连接配置
+
+          ### 下载
+          - Windows 64-bit：`scrcpy-win64-${{ github.ref_name }}.zip`
+          - Windows 32-bit：`scrcpy-win32-${{ github.ref_name }}.zip`
+
+          SHA256 校验和见 `SHA256SUMS.txt`。
+          EOF
+          shopt -s nullglob
+          files=(release/output/*)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No files in release/output" >&2
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --title "myScrcpyEx $GITHUB_REF_NAME" \
+            --notes-file /tmp/release-notes.md \
+            "${files[@]}"
