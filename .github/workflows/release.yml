@@ -1,16 +1,30 @@
 name: Build
 
 on:
+  pull_request:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       name:
         description: 'Version name (default is ref name)'
 
 env:
-  # $VERSION is used by release scripts
+  # Used by release scripts. Slashes in branch names are sanitized in
+  # release/build_common so they are safe as filenames.
   VERSION: ${{ github.event.inputs.name || github.ref_name }}
 
 jobs:
+  test-dep-download-retry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test get_file retries
+        run: bash app/deps/test_get_file.sh
+
   build-scrcpy-server:
     runs-on: ubuntu-latest
     env:
@@ -404,6 +418,7 @@ jobs:
 
   release:
     needs:
+      - test-dep-download-retry
       - build-scrcpy-server
       - package-linux-x86_64
       - package-win32
@@ -411,6 +426,8 @@ jobs:
       - package-macos-aarch64
       - package-macos-x86_64
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -457,8 +474,44 @@ jobs:
       - name: Generate checksums
         run: release/generate_checksums.sh
 
+      - name: Sanitize artifact name
+        run: echo "ARTIFACT_VERSION=${VERSION//\//-}" >> "$GITHUB_ENV"
+
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: scrcpy-release-${{ env.VERSION }}
+          name: scrcpy-release-${{ env.ARTIFACT_VERSION }}
           path: release/output
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > /tmp/release-notes.md <<'EOF'
+          基于 [scrcpy](https://github.com/Genymobile/scrcpy) 3.3.4 的增强版。
+
+          ### 本 fork 新增
+          - 启动时无设备或多设备弹出选择窗口
+          - 支持 `SCRCPY_REMOTE` 远程连接配置
+
+          ### 下载
+          - Windows 64-bit：`scrcpy-win64-${{ github.ref_name }}.zip`
+          - Windows 32-bit：`scrcpy-win32-${{ github.ref_name }}.zip`
+          - macOS Apple Silicon：`scrcpy-macos-aarch64-${{ github.ref_name }}.tar.gz`
+          - macOS Intel：`scrcpy-macos-x86_64-${{ github.ref_name }}.tar.gz`
+          - Linux x86_64：`scrcpy-linux-x86_64-${{ github.ref_name }}.tar.gz`
+          - 独立 server：`scrcpy-server-${{ github.ref_name }}`
+
+          SHA256 校验和见 `SHA256SUMS.txt`。
+          EOF
+          shopt -s nullglob
+          files=(release/output/*)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No files in release/output" >&2
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --title "myScrcpyEx $GITHUB_REF_NAME" \
+            --notes-file /tmp/release-notes.md \
+            "${files[@]}"
