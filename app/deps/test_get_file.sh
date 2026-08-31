@@ -53,6 +53,38 @@ EOF
     chmod +x "$mock_dir/wget"
 }
 
+make_mock_wget_html_then_ok() {
+    local mock_dir="$1"
+    local html_times="$2"
+    mkdir -p "$mock_dir"
+    cat > "$mock_dir/wget" << EOF
+#!/usr/bin/env bash
+count_file="\$WGET_COUNT_FILE"
+n=\$(cat "\$count_file" 2>/dev/null || echo 0)
+n=\$((n + 1))
+echo "\$n" > "\$count_file"
+out=""
+while [[ \$# -gt 0 ]]
+do
+    if [[ "\$1" == "-O" ]]
+    then
+        out="\$2"
+        shift 2
+        continue
+    fi
+    shift
+done
+if [[ \$n -le $html_times ]]
+then
+    printf 'html challenge\\n' > "\$out"
+    exit 0
+fi
+printf 'hello\\n' > "\$out"
+exit 0
+EOF
+    chmod +x "$mock_dir/wget"
+}
+
 PAYLOAD_SUM=$(printf 'hello\n' | shasum -a256 | awk '{print $1}')
 
 # --- retry until wget succeeds ---
@@ -100,6 +132,44 @@ then
 else
     attempts=$(cat "$MOCK/count")
     assert_eq "$attempts" "5" "get_file gives up after 5 wget attempts"
+fi
+rm -rf "$WORKDIR" "$MOCK"
+
+# --- wget succeeds with HTML (wrong checksum) then real tarball ---
+WORKDIR=$(mktemp -d)
+MOCK=$(mktemp -d)
+make_mock_wget_html_then_ok "$MOCK" 2
+export PATH="$MOCK:$ORIGINAL_PATH"
+export WGET_COUNT_FILE="$MOCK/count"
+hash -r
+export DOWNLOAD_RETRY_SLEEP=0
+cd "$WORKDIR"
+if get_file "https://example.invalid/dav1d.tar.gz" "dav1d.tar.gz" "$PAYLOAD_SUM"
+then
+    attempts=$(cat "$MOCK/count")
+    assert_eq "$attempts" "3" "get_file retries when wget saves HTML with a wrong checksum"
+else
+    echo "FAIL: get_file should succeed after HTML checksum mismatches" >&2
+    FAIL=$((FAIL + 1))
+fi
+rm -rf "$WORKDIR" "$MOCK"
+
+# --- wget always saves HTML ---
+WORKDIR=$(mktemp -d)
+MOCK=$(mktemp -d)
+make_mock_wget_html_then_ok "$MOCK" 99
+export PATH="$MOCK:$ORIGINAL_PATH"
+export WGET_COUNT_FILE="$MOCK/count"
+hash -r
+export DOWNLOAD_RETRY_SLEEP=0
+cd "$WORKDIR"
+if get_file "https://example.invalid/dav1d.tar.gz" "dav1d.tar.gz" "$PAYLOAD_SUM"
+then
+    echo "FAIL: get_file should fail when checksum never matches" >&2
+    FAIL=$((FAIL + 1))
+else
+    attempts=$(cat "$MOCK/count")
+    assert_eq "$attempts" "5" "get_file gives up after 5 checksum mismatches"
 fi
 rm -rf "$WORKDIR" "$MOCK"
 
