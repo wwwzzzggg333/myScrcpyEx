@@ -28,7 +28,11 @@ rm -rf "$ARCHIVE_DIR/$TARGET_DIRNAME"
 mkdir -p "$ARCHIVE_DIR/$TARGET_DIRNAME"
 
 cp -r "$BUILD_DIR/dist/." "$ARCHIVE_DIR/$TARGET_DIRNAME/"
-cp "$WORK_DIR/build-server/server/scrcpy-server" "$ARCHIVE_DIR/$TARGET_DIRNAME/"
+if [[ "${SKIP_SERVER:-}" == 1 ]]; then
+    echo "Skipping scrcpy-server (SKIP_SERVER=1)"
+else
+    cp "$WORK_DIR/build-server/server/scrcpy-server" "$ARCHIVE_DIR/$TARGET_DIRNAME/"
+fi
 
 mkdir -p "$OUTPUT_DIR"
 
