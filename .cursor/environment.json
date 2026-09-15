@@ -1,0 +1,4 @@
+{
+  "name": "scrcpy",
+  "install": "bash .cursor/install.sh"
+}
