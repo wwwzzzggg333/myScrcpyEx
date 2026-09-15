@@ -65,12 +65,31 @@ get_file() {
     local url="$1"
     local file="$2"
     local sum="$3"
+    local max_tries=5
+    local try=1
+    local sleep_s
     if [[ -f "$file" ]]
     then
         echo "$file: found"
     else
         echo "$file: not found, downloading..."
-        wget "$url" -O "$file"
+        while true
+        do
+            if wget --timeout=30 --tries=1 -O "$file" "$url"
+            then
+                break
+            fi
+            rm -f "$file"
+            if [[ "$try" -ge "$max_tries" ]]
+            then
+                echo "$file: download failed after $max_tries attempts" >&2
+                return 1
+            fi
+            sleep_s="${DOWNLOAD_RETRY_SLEEP:-$((try * 2))}"
+            echo "$file: download failed (attempt $try/$max_tries), retrying in ${sleep_s}s..." >&2
+            sleep "$sleep_s"
+            try=$((try + 1))
+        done
     fi
     checksum "$file" "$sum"
 }
